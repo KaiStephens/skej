@@ -44,7 +44,7 @@ if (!fs.existsSync('uploads')) {
 // Schedule endpoint - receives audio and returns scheduled tasks
 app.post('/api/schedule', upload.single('audio'), async (req, res) => {
     try {
-        const { context, date, existingTasks } = req.body;
+        const { context, date, existingTasks, viewMode, weekDates } = req.body;
         const audioFile = req.file;
 
         if (!audioFile) {
@@ -55,7 +55,7 @@ app.post('/api/schedule', upload.single('audio'), async (req, res) => {
         const audioData = fs.readFileSync(audioFile.path);
         const base64Audio = audioData.toString('base64');
 
-        // Determine mime type from file extension or default to webm
+        // Determine mime type
         let mimeType = 'audio/webm';
         if (audioFile.originalname) {
             const ext = path.extname(audioFile.originalname).toLowerCase();
@@ -73,15 +73,60 @@ app.post('/api/schedule', upload.single('audio'), async (req, res) => {
             currentTasks = [];
         }
 
+        // Parse historical tasks for pattern recognition
+        let historicalTasks = [];
+        try {
+            historicalTasks = JSON.parse(req.body.historicalTasks || '[]');
+        } catch (e) {
+            historicalTasks = [];
+        }
+
+        // Parse week dates if in weekly mode
+        let weekInfo = '';
+        if (viewMode === 'weekly') {
+            try {
+                const dates = JSON.parse(weekDates || '[]');
+                weekInfo = `\nAVAILABLE DAYS THIS WEEK:\n${dates.map(d => `- ${d.dayName} (${d.date})`).join('\n')}\n`;
+
+                // Also parse next week dates for future scheduling
+                const nextWeekDates = req.body.nextWeekDates;
+                if (nextWeekDates) {
+                    const nextDates = JSON.parse(nextWeekDates);
+                    weekInfo += `\nNEXT WEEK (for "schedule next week" requests):\n${nextDates.map(d => `- ${d.dayName} (${d.date})`).join('\n')}\n`;
+                }
+            } catch (e) { }
+        }
+
+        // Build historical patterns summary
+        let patternInfo = '';
+        if (historicalTasks.length > 0) {
+            // Group by task name and day of week to find patterns
+            const patterns = {};
+            historicalTasks.forEach(t => {
+                const key = `${t.text}|${t.dayOfWeek}`;
+                if (!patterns[key]) {
+                    patterns[key] = { text: t.text, dayOfWeek: t.dayOfWeek, count: 0, hour: t.hour };
+                }
+                patterns[key].count++;
+            });
+
+            const recurringTasks = Object.values(patterns).filter(p => p.count >= 1);
+            if (recurringTasks.length > 0) {
+                patternInfo = `\nHISTORICAL PATTERNS (from past 2 weeks - use these as defaults for recurring tasks):
+${recurringTasks.map(p => `- "${p.text}" on ${p.dayOfWeek}s at ${p.hour > 12 ? p.hour - 12 : p.hour}${p.hour >= 12 ? 'PM' : 'AM'} (occurred ${p.count}x)`).join('\n')}\n`;
+            }
+        }
+
         // Build the prompt
-        const systemPrompt = `You are a smart scheduling assistant. Listen to the user's voice message and manage their schedule.
+        const isWeekly = viewMode === 'weekly';
+        const systemPrompt = `You are a smart scheduling assistant. Listen to the user's voice message and manage their ${isWeekly ? 'weekly' : 'daily'} schedule.
 
 User Context (preferences, location, etc.):
 ${context || 'No additional context provided.'}
-
-Current Date: ${date || new Date().toLocaleDateString()}
-
-EXISTING SCHEDULE:
+${patternInfo}
+${isWeekly ? 'Current Week' : 'Current Date'}: ${date || new Date().toLocaleDateString()}
+${weekInfo}
+EXISTING SCHEDULE FOR THIS ${isWeekly ? 'WEEK' : 'DAY'}:
 ${currentTasks.length > 0 ? JSON.stringify(currentTasks, null, 2) : 'No tasks scheduled yet.'}
 
 IMPORTANT INSTRUCTIONS:
@@ -89,25 +134,37 @@ IMPORTANT INSTRUCTIONS:
    - ADD new tasks
    - MODIFY existing tasks (change time, duration, name, subtasks)
    - DELETE tasks
-   - Or a combination of the above
+   - Schedule their ENTIRE week with multiple tasks per day
+   - Schedule a FUTURE week (next week, week after, etc.) - use appropriate future dates
 2. For each task operation, specify the action type
-3. For modifications, reference the task by its ID
+3. For modifications, reference the task by its ID${isWeekly ? ' and date' : ''}
 4. For new tasks, determine:
+   - ${isWeekly ? 'The date (YYYY-MM-DD format) - CRITICAL: use correct dates from AVAILABLE DAYS list' : ''}
    - The best start time (hour 0-23, and minute 0, 15, 30, or 45)
    - Duration in minutes (15, 30, 45, 60, 90, 120, etc.)
    - A list of subtasks/steps to complete that task
-5. If the user says things like "move yoga to 8pm" or "change the time of...", MODIFY the existing task
-6. If the user says "cancel", "remove", "delete" a task, DELETE it
-7. Generate helpful subtasks for new/modified tasks
-8. Return ONLY valid JSON, no other text
+${isWeekly ? `5. WEEKLY SCHEDULING RULES:
+   - When user says "plan my week" or "schedule my entire week", create tasks for EVERY DAY (Sunday through Saturday)
+   - Use the HISTORICAL PATTERNS to add recurring tasks (like school, work) to appropriate days
+   - Each day should have multiple tasks scheduled based on user context and patterns
+   - If user mentions "next week" - calculate dates for the FOLLOWING week
+   - ALWAYS include a date (YYYY-MM-DD) for each task in weekly mode
+   - Schedule realistically - morning routines, meals, activities, evening wind-down` : ''}
+6. If the user mentions a day of the week (Monday, Tuesday, etc.), schedule on that day
+7. If the user says "move yoga to 8pm" or "change the time of...", MODIFY the existing task
+8. If the user says "cancel", "remove", "delete" a task, DELETE it
+9. Generate helpful subtasks for complex tasks (getting ready, workouts, etc.)
+10. Return ONLY valid JSON, no other text
 
 Return your response as JSON in this exact format:
 {
   "operations": [
     {
       "action": "add",
+      ${isWeekly ? '"date": "YYYY-MM-DD",' : ''}
       "task": {
         "text": "Task name",
+        ${isWeekly ? '"date": "YYYY-MM-DD",' : ''}
         "hour": 8,
         "minute": 0,
         "duration": 60,
@@ -117,6 +174,7 @@ Return your response as JSON in this exact format:
     {
       "action": "update",
       "id": 123,
+      ${isWeekly ? '"date": "YYYY-MM-DD",' : ''}
       "changes": {
         "hour": 19,
         "minute": 30,
@@ -127,7 +185,7 @@ Return your response as JSON in this exact format:
     },
     {
       "action": "delete",
-      "id": 456
+      "id": 456${isWeekly ? ',\n      "date": "YYYY-MM-DD"' : ''}
     }
   ],
   "message": "Brief confirmation of what was done"

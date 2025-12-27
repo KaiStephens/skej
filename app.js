@@ -1,28 +1,38 @@
 // State
 let allTasks = {}; // { 'YYYY-MM-DD': [tasks] }
 let currentDate = new Date();
+let currentWeekStart = getWeekStart(new Date());
 let taskIdCounter = 0;
 let aiContext = '';
+let viewMode = 'daily'; // 'daily' or 'weekly'
 let isRecording = false;
 let mediaRecorder = null;
 let audioChunks = [];
 let selectedTaskId = null;
+let selectedTaskDate = null;
 
 const API_URL = 'http://localhost:3001';
-const SLOT_HEIGHT = 60; // pixels per hour slot
+const SLOT_HEIGHT = 60;
+const WEEK_SLOT_HEIGHT = 40;
+const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // DOM Elements
 const timeline = document.getElementById('timeline');
+const weeklyView = document.getElementById('weeklyView');
+const weekHeader = document.getElementById('weekHeader');
+const weekGrid = document.getElementById('weekGrid');
 const dateDisplay = document.getElementById('dateDisplay');
 const dateBtn = document.getElementById('dateBtn');
 const datePicker = document.getElementById('datePicker');
-const prevDayBtn = document.getElementById('prevDay');
-const nextDayBtn = document.getElementById('nextDay');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
 const infoBtn = document.getElementById('infoBtn');
 const infoModal = document.getElementById('infoModal');
 const closeModal = document.getElementById('closeModal');
 const aiContextInput = document.getElementById('aiContext');
 const saveContextBtn = document.getElementById('saveContext');
+const dailyViewBtn = document.getElementById('dailyViewBtn');
+const weeklyViewBtn = document.getElementById('weeklyViewBtn');
 const micBtn = document.getElementById('micBtn');
 const voiceStatus = document.getElementById('voiceStatus');
 
@@ -34,25 +44,40 @@ const subtasksList = document.getElementById('subtasksList');
 const closeTaskModal = document.getElementById('closeTaskModal');
 const deleteTaskBtn = document.getElementById('deleteTaskBtn');
 
-// Get current tasks for selected date
-function getCurrentTasks() {
-    const key = getDateKey(currentDate);
-    return allTasks[key] || [];
-}
-
-function setCurrentTasks(tasks) {
-    const key = getDateKey(currentDate);
-    allTasks[key] = tasks;
-}
-
 // Date helpers
 function getDateKey(date) {
-    return date.toISOString().split('T')[0]; // 'YYYY-MM-DD'
+    return date.toISOString().split('T')[0];
+}
+
+function getWeekStart(date) {
+    const d = new Date(date);
+    const day = d.getDay();
+    d.setDate(d.getDate() - day);
+    d.setHours(0, 0, 0, 0);
+    return d;
+}
+
+function getWeekDates(weekStart) {
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(weekStart);
+        d.setDate(d.getDate() + i);
+        dates.push(d);
+    }
+    return dates;
 }
 
 function formatDateDisplay(date) {
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
     return date.toLocaleDateString('en-US', options);
+}
+
+function formatWeekDisplay(weekStart) {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 6);
+    const startMonth = weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const endMonth = weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return `${startMonth} - ${endMonth}`;
 }
 
 function isToday(date) {
@@ -66,31 +91,88 @@ function isTomorrow(date) {
     return getDateKey(date) === getDateKey(tomorrow);
 }
 
+function isDateInWeek(date, weekStart) {
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    return date >= weekStart && date < weekEnd;
+}
+
+// Task getters/setters
+function getTasksForDate(date) {
+    const key = getDateKey(date);
+    return allTasks[key] || [];
+}
+
+function setTasksForDate(date, tasks) {
+    const key = getDateKey(date);
+    allTasks[key] = tasks;
+}
+
+function getCurrentTasks() {
+    return getTasksForDate(currentDate);
+}
+
+function setCurrentTasks(tasks) {
+    setTasksForDate(currentDate, tasks);
+}
+
 // Initialize
 function init() {
     loadFromStorage();
     displayDate();
-    generateTimeline();
-    renderAllTasks();
+    if (viewMode === 'weekly') {
+        showWeeklyView();
+    } else {
+        showDailyView();
+    }
     setupEventListeners();
 }
 
-// Display current date
+// Display date/week in header
 function displayDate() {
-    if (isToday(currentDate)) {
-        dateDisplay.textContent = 'Today';
-    } else if (isTomorrow(currentDate)) {
-        dateDisplay.textContent = 'Tomorrow';
+    if (viewMode === 'weekly') {
+        dateDisplay.textContent = formatWeekDisplay(currentWeekStart);
+        datePicker.value = getDateKey(currentWeekStart);
     } else {
-        dateDisplay.textContent = formatDateDisplay(currentDate);
+        if (isToday(currentDate)) {
+            dateDisplay.textContent = 'Today';
+        } else if (isTomorrow(currentDate)) {
+            dateDisplay.textContent = 'Tomorrow';
+        } else {
+            dateDisplay.textContent = formatDateDisplay(currentDate);
+        }
+        datePicker.value = getDateKey(currentDate);
     }
-    datePicker.value = getDateKey(currentDate);
 }
 
-// Generate 24-hour timeline (hourly slots)
-function generateTimeline() {
-    timeline.innerHTML = '';
+// View switching
+function showDailyView() {
+    viewMode = 'daily';
+    timeline.style.display = 'block';
+    weeklyView.style.display = 'none';
+    dailyViewBtn.classList.add('active');
+    weeklyViewBtn.classList.remove('active');
+    generateDailyTimeline();
+    renderDailyTasks();
+    displayDate();
+    localStorage.setItem('skej-view-mode', 'daily');
+}
 
+function showWeeklyView() {
+    viewMode = 'weekly';
+    timeline.style.display = 'none';
+    weeklyView.style.display = 'block';
+    dailyViewBtn.classList.remove('active');
+    weeklyViewBtn.classList.add('active');
+    generateWeeklyView();
+    renderWeeklyTasks();
+    displayDate();
+    localStorage.setItem('skej-view-mode', 'weekly');
+}
+
+// Generate daily timeline
+function generateDailyTimeline() {
+    timeline.innerHTML = '';
     for (let hour = 0; hour < 24; hour++) {
         const slot = document.createElement('div');
         slot.className = 'time-slot';
@@ -104,8 +186,7 @@ function generateTimeline() {
         const slotContent = document.createElement('div');
         slotContent.className = 'slot-content';
         slotContent.dataset.hour = hour;
-
-        // Drag and drop events for slot
+        slotContent.dataset.date = getDateKey(currentDate);
         slotContent.addEventListener('dragover', handleDragOver);
         slotContent.addEventListener('dragleave', handleDragLeave);
         slotContent.addEventListener('drop', handleDrop);
@@ -116,78 +197,134 @@ function generateTimeline() {
     }
 }
 
-// Navigate to different date
+// Generate weekly view
+function generateWeeklyView() {
+    const weekDates = getWeekDates(currentWeekStart);
+
+    // Header
+    weekHeader.innerHTML = '<div class="week-header-cell"></div>';
+    weekDates.forEach(date => {
+        const cell = document.createElement('div');
+        cell.className = 'week-header-cell' + (isToday(date) ? ' today' : '');
+        cell.innerHTML = `
+      <span class="week-header-day">${DAYS[date.getDay()]}</span>
+      ${date.getDate()}
+    `;
+        weekHeader.appendChild(cell);
+    });
+
+    // Grid (full 24 hours)
+    weekGrid.innerHTML = '';
+    for (let hour = 0; hour < 24; hour++) {
+        // Time label
+        const timeLabel = document.createElement('div');
+        timeLabel.className = 'week-time-label';
+        const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+        const ampm = hour < 12 ? 'AM' : 'PM';
+        timeLabel.textContent = `${displayHour}${ampm}`;
+        weekGrid.appendChild(timeLabel);
+
+        // Day cells
+        weekDates.forEach(date => {
+            const cell = document.createElement('div');
+            cell.className = 'week-cell';
+            cell.dataset.hour = hour;
+            cell.dataset.date = getDateKey(date);
+            cell.addEventListener('dragover', handleDragOver);
+            cell.addEventListener('dragleave', handleDragLeave);
+            cell.addEventListener('drop', handleDrop);
+            weekGrid.appendChild(cell);
+        });
+    }
+}
+
+// Navigation
+function goToPrev() {
+    if (viewMode === 'weekly') {
+        currentWeekStart.setDate(currentWeekStart.getDate() - 7);
+        generateWeeklyView();
+        renderWeeklyTasks();
+    } else {
+        currentDate.setDate(currentDate.getDate() - 1);
+        generateDailyTimeline();
+        renderDailyTasks();
+    }
+    displayDate();
+}
+
+function goToNext() {
+    if (viewMode === 'weekly') {
+        currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+        generateWeeklyView();
+        renderWeeklyTasks();
+    } else {
+        currentDate.setDate(currentDate.getDate() + 1);
+        generateDailyTimeline();
+        renderDailyTasks();
+    }
+    displayDate();
+}
+
 function goToDate(date) {
     currentDate = new Date(date);
+    currentWeekStart = getWeekStart(currentDate);
+    if (viewMode === 'weekly') {
+        generateWeeklyView();
+        renderWeeklyTasks();
+    } else {
+        generateDailyTimeline();
+        renderDailyTasks();
+    }
     displayDate();
-    renderAllTasks();
-}
-
-function goToPrevDay() {
-    const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() - 1);
-    goToDate(newDate);
-}
-
-function goToNextDay() {
-    const newDate = new Date(currentDate);
-    newDate.setDate(newDate.getDate() + 1);
-    goToDate(newDate);
 }
 
 // Setup event listeners
 function setupEventListeners() {
-    // Date navigation
-    if (prevDayBtn) {
-        prevDayBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            console.log('Prev day clicked');
-            goToPrevDay();
-        });
-    }
+    // Navigation
+    prevBtn.addEventListener('click', (e) => { e.preventDefault(); goToPrev(); });
+    nextBtn.addEventListener('click', (e) => { e.preventDefault(); goToNext(); });
 
-    if (nextDayBtn) {
-        nextDayBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            console.log('Next day clicked');
-            goToNextDay();
-        });
-    }
+    dateBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (typeof datePicker.showPicker === 'function') {
+            datePicker.showPicker();
+        } else {
+            datePicker.click();
+        }
+    });
 
-    if (dateBtn && datePicker) {
-        dateBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            console.log('Date button clicked');
-            // Try showPicker, fall back to click
-            if (typeof datePicker.showPicker === 'function') {
-                datePicker.showPicker();
-            } else {
-                datePicker.click();
-            }
-        });
+    datePicker.addEventListener('change', (e) => {
+        if (e.target.value) {
+            goToDate(new Date(e.target.value + 'T12:00:00'));
+        }
+    });
 
-        datePicker.addEventListener('change', (e) => {
-            console.log('Date changed:', e.target.value);
-            if (e.target.value) {
-                goToDate(new Date(e.target.value + 'T12:00:00'));
-            }
-        });
-    }
-
-    // Info Modal controls
+    // Settings Modal
     infoBtn.addEventListener('click', () => {
         infoModal.classList.add('open');
         aiContextInput.value = aiContext;
-    });
-
-    closeModal.addEventListener('click', () => {
-        infoModal.classList.remove('open');
-    });
-
-    infoModal.addEventListener('click', (e) => {
-        if (e.target === infoModal) {
-            infoModal.classList.remove('open');
+        // Update toggle buttons to reflect current state
+        if (viewMode === 'weekly') {
+            weeklyViewBtn.classList.add('active');
+            dailyViewBtn.classList.remove('active');
+        } else {
+            dailyViewBtn.classList.add('active');
+            weeklyViewBtn.classList.remove('active');
         }
+    });
+
+    closeModal.addEventListener('click', () => infoModal.classList.remove('open'));
+    infoModal.addEventListener('click', (e) => {
+        if (e.target === infoModal) infoModal.classList.remove('open');
+    });
+
+    // View toggle
+    dailyViewBtn.addEventListener('click', () => {
+        showDailyView();
+    });
+
+    weeklyViewBtn.addEventListener('click', () => {
+        showWeeklyView();
     });
 
     saveContextBtn.addEventListener('click', () => {
@@ -196,28 +333,31 @@ function setupEventListeners() {
         infoModal.classList.remove('open');
     });
 
-    // Task Modal controls
+    // Task Modal
     closeTaskModal.addEventListener('click', () => {
         taskModal.classList.remove('open');
         selectedTaskId = null;
+        selectedTaskDate = null;
     });
 
     taskModal.addEventListener('click', (e) => {
         if (e.target === taskModal) {
             taskModal.classList.remove('open');
             selectedTaskId = null;
+            selectedTaskDate = null;
         }
     });
 
     deleteTaskBtn.addEventListener('click', () => {
-        if (selectedTaskId !== null) {
-            deleteTask(selectedTaskId);
+        if (selectedTaskId !== null && selectedTaskDate) {
+            deleteTask(selectedTaskId, selectedTaskDate);
             taskModal.classList.remove('open');
             selectedTaskId = null;
+            selectedTaskDate = null;
         }
     });
 
-    // Mic button - record audio
+    // Mic button
     micBtn.addEventListener('click', toggleRecording);
 }
 
@@ -229,15 +369,15 @@ function formatTime(h, m) {
 }
 
 // Open task details modal
-function openTaskModal(taskId) {
-    const tasks = getCurrentTasks();
+function openTaskModal(taskId, dateKey) {
+    const tasks = allTasks[dateKey] || [];
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
 
     selectedTaskId = taskId;
+    selectedTaskDate = dateKey;
     taskModalTitle.textContent = task.text;
 
-    // Format time info
     const startHour = task.hour;
     const startMinute = task.minute || 0;
     const duration = task.duration || 60;
@@ -245,24 +385,23 @@ function openTaskModal(taskId) {
     const endHour = Math.floor(endMinutes / 60) % 24;
     const endMinute = endMinutes % 60;
 
-    taskTimeInfo.textContent = `${formatTime(startHour, startMinute)} - ${formatTime(endHour, endMinute)} (${duration} min)`;
+    const dateObj = new Date(dateKey + 'T12:00:00');
+    const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
 
-    // Render subtasks
+    taskTimeInfo.textContent = `${dayName} • ${formatTime(startHour, startMinute)} - ${formatTime(endHour, endMinute)} (${duration} min)`;
+
     renderSubtasks(task);
-
     taskModal.classList.add('open');
 }
 
-// Render subtasks with checkboxes
+// Render subtasks
 function renderSubtasks(task) {
     subtasksList.innerHTML = '';
-
     if (!task.subtasks || task.subtasks.length === 0) {
         subtasksList.innerHTML = '<p style="color: #999; font-size: 14px;">No subtasks</p>';
         return;
     }
 
-    // Initialize completed array if not exists
     if (!task.subtasksCompleted) {
         task.subtasksCompleted = new Array(task.subtasks.length).fill(false);
     }
@@ -308,9 +447,7 @@ async function startRecording() {
         audioChunks = [];
 
         mediaRecorder.ondataavailable = (e) => {
-            if (e.data.size > 0) {
-                audioChunks.push(e.data);
-            }
+            if (e.data.size > 0) audioChunks.push(e.data);
         };
 
         mediaRecorder.onstop = async () => {
@@ -323,7 +460,6 @@ async function startRecording() {
         isRecording = true;
         micBtn.classList.add('recording');
         voiceStatus.textContent = 'Recording... Click to stop';
-
     } catch (error) {
         console.error('Error accessing microphone:', error);
         voiceStatus.textContent = 'Microphone access denied';
@@ -339,28 +475,88 @@ function stopRecording() {
     }
 }
 
-// Send audio to AI backend
+// Send audio to AI
 async function sendAudioToAI(audioBlob) {
     try {
         voiceStatus.textContent = 'AI is thinking...';
         micBtn.disabled = true;
 
-        const tasks = getCurrentTasks();
+        let existingTasksForAI = [];
+        let historicalTasks = [];
+        let dateContext = '';
 
-        // Prepare existing tasks for AI
-        const existingTasksForAI = tasks.map(t => ({
-            id: t.id,
-            text: t.text,
-            hour: t.hour,
-            minute: t.minute || 0,
-            duration: t.duration || 60
-        }));
+        // Get historical tasks from past 2 weeks for pattern recognition
+        const twoWeeksAgo = new Date();
+        twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+
+        Object.keys(allTasks).forEach(dateKey => {
+            const taskDate = new Date(dateKey + 'T12:00:00');
+            const tasks = allTasks[dateKey] || [];
+
+            // Skip if no tasks
+            if (tasks.length === 0) return;
+
+            // Check if this is in the current view range
+            const isCurrentRange = viewMode === 'weekly'
+                ? isDateInWeek(taskDate, currentWeekStart)
+                : getDateKey(taskDate) === getDateKey(currentDate);
+
+            if (isCurrentRange) {
+                // Current tasks for editing
+                tasks.forEach(t => {
+                    existingTasksForAI.push({
+                        id: t.id,
+                        date: dateKey,
+                        dayName: taskDate.toLocaleDateString('en-US', { weekday: 'long' }),
+                        text: t.text,
+                        hour: t.hour,
+                        minute: t.minute || 0,
+                        duration: t.duration || 60
+                    });
+                });
+            } else if (taskDate >= twoWeeksAgo && taskDate < new Date()) {
+                // Historical tasks for pattern learning
+                tasks.forEach(t => {
+                    historicalTasks.push({
+                        date: dateKey,
+                        dayOfWeek: taskDate.toLocaleDateString('en-US', { weekday: 'long' }),
+                        text: t.text,
+                        hour: t.hour,
+                        duration: t.duration || 60
+                    });
+                });
+            }
+        });
+
+        if (viewMode === 'weekly') {
+            dateContext = `Week of ${formatWeekDisplay(currentWeekStart)}`;
+        } else {
+            dateContext = formatDateDisplay(currentDate);
+        }
 
         const formData = new FormData();
         formData.append('audio', audioBlob, 'recording.webm');
         formData.append('context', aiContext);
         formData.append('existingTasks', JSON.stringify(existingTasksForAI));
-        formData.append('date', formatDateDisplay(currentDate));
+        formData.append('historicalTasks', JSON.stringify(historicalTasks));
+        formData.append('date', dateContext);
+        formData.append('viewMode', viewMode);
+
+        if (viewMode === 'weekly') {
+            // Send current week dates
+            formData.append('weekDates', JSON.stringify(getWeekDates(currentWeekStart).map(d => ({
+                date: getDateKey(d),
+                dayName: d.toLocaleDateString('en-US', { weekday: 'long' })
+            }))));
+
+            // Also send next week dates for "next week" scheduling
+            const nextWeekStart = new Date(currentWeekStart);
+            nextWeekStart.setDate(nextWeekStart.getDate() + 7);
+            formData.append('nextWeekDates', JSON.stringify(getWeekDates(nextWeekStart).map(d => ({
+                date: getDateKey(d),
+                dayName: d.toLocaleDateString('en-US', { weekday: 'long' })
+            }))));
+        }
 
         const response = await fetch(`${API_URL}/api/schedule`, {
             method: 'POST',
@@ -375,58 +571,66 @@ async function sendAudioToAI(audioBlob) {
         const data = await response.json();
         console.log('AI response:', data);
 
-        // Handle operations (new format) or legacy tasks format
         if (data.operations && Array.isArray(data.operations)) {
             let addCount = 0, updateCount = 0, deleteCount = 0;
 
             data.operations.forEach(op => {
+                // Determine target date
+                let targetDate = viewMode === 'weekly'
+                    ? (op.date || op.task?.date || getDateKey(currentWeekStart))
+                    : getDateKey(currentDate);
+
                 if (op.action === 'add' && op.task) {
-                    addTask(
-                        op.task.text,
-                        op.task.hour,
-                        op.task.minute || 0,
-                        op.task.duration || 60,
-                        op.task.subtasks || []
-                    );
+                    if (op.task.date) targetDate = op.task.date;
+                    addTaskToDate(targetDate, op.task.text, op.task.hour, op.task.minute || 0, op.task.duration || 60, op.task.subtasks || []);
                     addCount++;
                 } else if (op.action === 'update' && op.id !== undefined) {
-                    updateTask(op.id, op.changes || {});
+                    if (op.date) targetDate = op.date;
+                    updateTaskInDate(targetDate, op.id, op.changes || {});
                     updateCount++;
                 } else if (op.action === 'delete' && op.id !== undefined) {
-                    deleteTask(op.id);
+                    if (op.date) targetDate = op.date;
+                    deleteTaskFromDate(targetDate, op.id);
                     deleteCount++;
                 }
             });
 
-            voiceStatus.textContent = data.message ||
-                `Done: ${addCount} added, ${updateCount} updated, ${deleteCount} deleted`;
+            voiceStatus.textContent = data.message || `Done: ${addCount} added, ${updateCount} updated, ${deleteCount} deleted`;
         } else if (data.tasks && Array.isArray(data.tasks)) {
-            // Legacy format fallback
             data.tasks.forEach(task => {
-                addTask(task.text, task.hour, task.minute || 0, task.duration || 60, task.subtasks || []);
+                const targetDate = task.date || getDateKey(currentDate);
+                addTaskToDate(targetDate, task.text, task.hour, task.minute || 0, task.duration || 60, task.subtasks || []);
             });
             voiceStatus.textContent = data.message || `Added ${data.tasks.length} task(s)`;
-        } else {
-            voiceStatus.textContent = 'No changes made';
         }
+
+        renderAllTasks();
 
     } catch (error) {
         console.error('Error sending to AI:', error);
         voiceStatus.textContent = `Error: ${error.message}`;
     } finally {
         micBtn.disabled = false;
-        setTimeout(() => {
-            voiceStatus.textContent = 'Click to speak';
-        }, 3000);
+        setTimeout(() => { voiceStatus.textContent = 'Click to speak'; }, 3000);
     }
 }
 
-// Update an existing task
-function updateTask(taskId, changes) {
-    const tasks = getCurrentTasks();
+// Task operations with date
+function addTaskToDate(dateKey, text, hour = 8, minute = 0, duration = 60, subtasks = []) {
+    const task = {
+        id: taskIdCounter++,
+        text, hour, minute, duration, subtasks,
+        subtasksCompleted: new Array(subtasks.length).fill(false)
+    };
+    if (!allTasks[dateKey]) allTasks[dateKey] = [];
+    allTasks[dateKey].push(task);
+    saveToStorage();
+}
+
+function updateTaskInDate(dateKey, taskId, changes) {
+    const tasks = allTasks[dateKey] || [];
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
-
     if (changes.text !== undefined) task.text = changes.text;
     if (changes.hour !== undefined) task.hour = changes.hour;
     if (changes.minute !== undefined) task.minute = changes.minute;
@@ -435,103 +639,99 @@ function updateTask(taskId, changes) {
         task.subtasks = changes.subtasks;
         task.subtasksCompleted = new Array(changes.subtasks.length).fill(false);
     }
-
-    setCurrentTasks(tasks);
-    renderAllTasks();
     saveToStorage();
 }
 
-// Add task with duration and subtasks
-function addTask(text, hour = 8, minute = 0, duration = 60, subtasks = []) {
-    const task = {
-        id: taskIdCounter++,
-        text: text,
-        hour: hour,
-        minute: minute,
-        duration: duration,
-        subtasks: subtasks,
-        subtasksCompleted: new Array(subtasks.length).fill(false)
-    };
+function deleteTaskFromDate(dateKey, taskId) {
+    if (!allTasks[dateKey]) return;
+    allTasks[dateKey] = allTasks[dateKey].filter(t => t.id !== taskId);
+    saveToStorage();
+}
 
+function deleteTask(taskId, dateKey) {
+    deleteTaskFromDate(dateKey, taskId);
+    renderAllTasks();
+}
+
+// Render tasks
+function renderAllTasks() {
+    if (viewMode === 'weekly') {
+        renderWeeklyTasks();
+    } else {
+        renderDailyTasks();
+    }
+}
+
+function renderDailyTasks() {
+    document.querySelectorAll('.slot-content').forEach(slot => slot.innerHTML = '');
     const tasks = getCurrentTasks();
-    tasks.push(task);
-    setCurrentTasks(tasks);
-    renderAllTasks();
-    saveToStorage();
+    tasks.forEach(task => {
+        if (task.hour !== null && task.hour !== undefined) {
+            const slot = document.querySelector(`.slot-content[data-hour="${task.hour}"][data-date="${getDateKey(currentDate)}"]`);
+            if (slot) renderTaskElement(task, slot, getDateKey(currentDate), SLOT_HEIGHT);
+        }
+    });
 }
 
-// Render a task element with proper position based on start minute
-function renderTask(task, container) {
+function renderWeeklyTasks() {
+    document.querySelectorAll('.week-cell').forEach(cell => cell.innerHTML = '');
+    const weekDates = getWeekDates(currentWeekStart);
+    weekDates.forEach(date => {
+        const dateKey = getDateKey(date);
+        const tasks = allTasks[dateKey] || [];
+        tasks.forEach(task => {
+            if (task.hour !== null && task.hour !== undefined) {
+                const cell = document.querySelector(`.week-cell[data-hour="${task.hour}"][data-date="${dateKey}"]`);
+                if (cell) renderTaskElement(task, cell, dateKey, WEEK_SLOT_HEIGHT);
+            }
+        });
+    });
+}
+
+function renderTaskElement(task, container, dateKey, slotHeight) {
     const taskEl = document.createElement('div');
     taskEl.className = 'task';
     taskEl.draggable = true;
     taskEl.dataset.taskId = task.id;
+    taskEl.dataset.date = dateKey;
 
     const minute = task.minute || 0;
     const duration = task.duration || 60;
-
-    // Position based on start minute
-    const topOffset = (minute / 60) * SLOT_HEIGHT;
-    const height = Math.max(18, (duration / 60) * SLOT_HEIGHT - 2);
+    const topOffset = (minute / 60) * slotHeight;
+    const height = Math.max(16, (duration / 60) * slotHeight - 2);
 
     taskEl.style.top = `${topOffset}px`;
     taskEl.style.height = `${height}px`;
 
-    // Task content
     const nameEl = document.createElement('div');
     nameEl.className = 'task-name';
     nameEl.textContent = task.text;
     taskEl.appendChild(nameEl);
 
-    // Show time range if there's room
-    if (height >= 30) {
-        const startHour = task.hour;
-        const endMinutes = startHour * 60 + minute + duration;
-        const endHour = Math.floor(endMinutes / 60) % 24;
-        const endMinute = endMinutes % 60;
-
+    if (height >= 28 && slotHeight === SLOT_HEIGHT) {
         const timeEl = document.createElement('div');
         timeEl.className = 'task-time';
-        timeEl.textContent = `${formatTime(startHour, minute)} - ${formatTime(endHour, endMinute)}`;
+        timeEl.textContent = formatTime(task.hour, minute);
         taskEl.appendChild(timeEl);
     }
 
-    // Show progress if has subtasks
-    if (task.subtasks && task.subtasks.length > 0 && height >= 44) {
-        const completed = (task.subtasksCompleted || []).filter(c => c).length;
-        const progressEl = document.createElement('div');
-        progressEl.className = 'task-progress';
-        progressEl.textContent = `${completed}/${task.subtasks.length} done`;
-        taskEl.appendChild(progressEl);
-    }
-
-    // Click to open details
     taskEl.addEventListener('click', () => {
         if (!taskEl.classList.contains('dragging')) {
-            openTaskModal(task.id);
+            openTaskModal(task.id, dateKey);
         }
     });
 
-    // Drag events
     taskEl.addEventListener('dragstart', handleDragStart);
     taskEl.addEventListener('dragend', handleDragEnd);
 
     container.appendChild(taskEl);
 }
 
-// Delete a task
-function deleteTask(taskId) {
-    let tasks = getCurrentTasks();
-    tasks = tasks.filter(t => t.id !== taskId);
-    setCurrentTasks(tasks);
-    renderAllTasks();
-    saveToStorage();
-}
-
 // Drag handlers
 function handleDragStart(e) {
     e.target.classList.add('dragging');
-    e.dataTransfer.setData('text/plain', e.target.dataset.taskId);
+    e.dataTransfer.setData('taskId', e.target.dataset.taskId);
+    e.dataTransfer.setData('sourceDate', e.target.dataset.date);
 }
 
 function handleDragEnd(e) {
@@ -551,47 +751,38 @@ function handleDrop(e) {
     e.preventDefault();
     e.currentTarget.classList.remove('drag-over');
 
-    const taskId = parseInt(e.dataTransfer.getData('text/plain'));
-    const hour = parseInt(e.currentTarget.dataset.hour);
+    const taskId = parseInt(e.dataTransfer.getData('taskId'));
+    const sourceDate = e.dataTransfer.getData('sourceDate');
+    const targetDate = e.currentTarget.dataset.date;
+    const targetHour = parseInt(e.currentTarget.dataset.hour);
 
-    // Calculate minute based on drop position
+    const slotHeight = viewMode === 'weekly' ? WEEK_SLOT_HEIGHT : SLOT_HEIGHT;
     const rect = e.currentTarget.getBoundingClientRect();
     const relativeY = e.clientY - rect.top;
-    const minute = Math.floor((relativeY / SLOT_HEIGHT) * 60);
+    const minute = Math.floor((relativeY / slotHeight) * 60);
     const snappedMinute = Math.round(minute / 15) * 15;
 
-    const tasks = getCurrentTasks();
-    const task = tasks.find(t => t.id === taskId);
-    if (task) {
-        task.hour = hour;
-        task.minute = Math.min(45, Math.max(0, snappedMinute));
-        setCurrentTasks(tasks);
-        renderAllTasks();
-        saveToStorage();
+    // Find and move task
+    const sourceTasks = allTasks[sourceDate] || [];
+    const taskIndex = sourceTasks.findIndex(t => t.id === taskId);
+    if (taskIndex === -1) return;
+
+    const task = sourceTasks[taskIndex];
+    task.hour = targetHour;
+    task.minute = Math.min(45, Math.max(0, snappedMinute));
+
+    // Move to different day if needed
+    if (sourceDate !== targetDate) {
+        sourceTasks.splice(taskIndex, 1);
+        if (!allTasks[targetDate]) allTasks[targetDate] = [];
+        allTasks[targetDate].push(task);
     }
+
+    saveToStorage();
+    renderAllTasks();
 }
 
-// Render all tasks for current date
-function renderAllTasks() {
-    // Clear all slot contents
-    document.querySelectorAll('.slot-content').forEach(slot => {
-        slot.innerHTML = '';
-    });
-
-    const tasks = getCurrentTasks();
-
-    // Render each scheduled task
-    tasks.forEach(task => {
-        if (task.hour !== null && task.hour !== undefined) {
-            const slot = document.querySelector(`.slot-content[data-hour="${task.hour}"]`);
-            if (slot) {
-                renderTask(task, slot);
-            }
-        }
-    });
-}
-
-// Local storage - now saves all dates
+// Storage
 function saveToStorage() {
     localStorage.setItem('skej-all-tasks', JSON.stringify(allTasks));
     localStorage.setItem('skej-counter', taskIdCounter.toString());
@@ -601,8 +792,9 @@ function loadFromStorage() {
     const savedAllTasks = localStorage.getItem('skej-all-tasks');
     const savedCounter = localStorage.getItem('skej-counter');
     const savedContext = localStorage.getItem('skej-context');
+    const savedViewMode = localStorage.getItem('skej-view-mode');
 
-    // Migrate old single-day format if exists
+    // Migrate old format
     const oldTasks = localStorage.getItem('skej-tasks');
     if (oldTasks && !savedAllTasks) {
         const todayKey = getDateKey(new Date());
@@ -613,27 +805,30 @@ function loadFromStorage() {
         allTasks = JSON.parse(savedAllTasks);
     }
 
-    if (savedCounter) {
-        taskIdCounter = parseInt(savedCounter);
-    }
-
-    if (savedContext) {
-        aiContext = savedContext;
-    }
+    if (savedCounter) taskIdCounter = parseInt(savedCounter);
+    if (savedContext) aiContext = savedContext;
+    if (savedViewMode) viewMode = savedViewMode;
 }
 
-// Expose API globally
+// API
 window.skej = {
-    addTask,
+    addTask: (text, hour, minute, duration, subtasks) => {
+        addTaskToDate(getDateKey(currentDate), text, hour, minute, duration, subtasks);
+        renderAllTasks();
+    },
     getTasks: getCurrentTasks,
     getContext: () => aiContext,
     goToDate,
+    setView: (mode) => mode === 'weekly' ? showWeeklyView() : showDailyView(),
     clearTasks: () => {
-        setCurrentTasks([]);
+        if (viewMode === 'weekly') {
+            getWeekDates(currentWeekStart).forEach(d => allTasks[getDateKey(d)] = []);
+        } else {
+            setCurrentTasks([]);
+        }
         renderAllTasks();
         saveToStorage();
     }
 };
 
-// Start
 init();
