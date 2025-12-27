@@ -1,0 +1,484 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #fff;
+  color: #000;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  padding-bottom: 120px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #000;
+  margin-bottom: 20px;
+}
+
+header h1 {
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nav-btn {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #000;
+  background: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-btn:hover {
+  background: #000;
+  color: #fff;
+}
+
+.date-btn {
+  padding: 6px 12px;
+  border: 1px solid #000;
+  background: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  min-width: 200px;
+  text-align: center;
+}
+
+.date-btn:hover {
+  background: #f5f5f5;
+}
+
+.info-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #000;
+  background: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+}
+
+.info-btn:hover {
+  background: #000;
+  color: #fff;
+}
+
+/* Modal */
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal.open {
+  display: flex;
+}
+
+.modal-content {
+  background: #fff;
+  padding: 25px;
+  width: 90%;
+  max-width: 500px;
+  border: 1px solid #000;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.task-modal-content {
+  max-width: 450px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.modal-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+/* Settings */
+.setting-group {
+  margin-bottom: 20px;
+}
+
+.setting-group label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.setting-hint {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.toggle-group {
+  display: flex;
+  border: 1px solid #000;
+}
+
+.toggle-btn {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  background: #fff;
+  font-size: 14px;
+  cursor: pointer;
+  border-right: 1px solid #000;
+}
+
+.toggle-btn:last-child {
+  border-right: none;
+}
+
+.toggle-btn.active {
+  background: #000;
+  color: #fff;
+}
+
+.toggle-btn:hover:not(.active) {
+  background: #f5f5f5;
+}
+
+.modal-content textarea {
+  width: 100%;
+  height: 100px;
+  padding: 12px;
+  border: 1px solid #000;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.save-btn {
+  width: 100%;
+  padding: 12px 20px;
+  background: #000;
+  color: #fff;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  margin-top: 10px;
+}
+
+.save-btn:hover {
+  background: #333;
+}
+
+/* Task Modal */
+.task-time-info {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.subtasks-list {
+  margin-bottom: 20px;
+}
+
+.subtask-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #eee;
+}
+
+.subtask-item:last-child {
+  border-bottom: none;
+}
+
+.subtask-checkbox {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: #000;
+}
+
+.subtask-text {
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.subtask-text.completed {
+  text-decoration: line-through;
+  color: #999;
+}
+
+.delete-task-btn {
+  width: 100%;
+  padding: 12px;
+  background: #fff;
+  color: #000;
+  border: 1px solid #000;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.delete-task-btn:hover {
+  background: #000;
+  color: #fff;
+}
+
+/* Daily Timeline */
+.main {
+  display: flex;
+}
+
+.timeline {
+  flex: 1;
+  border: 1px solid #000;
+}
+
+.time-slot {
+  display: flex;
+  border-bottom: 1px solid #ccc;
+  height: 60px;
+  position: relative;
+}
+
+.time-slot:last-child {
+  border-bottom: none;
+}
+
+.time-label {
+  width: 80px;
+  padding: 8px;
+  font-size: 12px;
+  border-right: 1px solid #000;
+  flex-shrink: 0;
+}
+
+.slot-content {
+  flex: 1;
+  position: relative;
+  height: 60px;
+}
+
+.slot-content.drag-over {
+  background: #f0f0f0;
+}
+
+/* Weekly View */
+.weekly-view {
+  flex: 1;
+  border: 1px solid #000;
+}
+
+.week-header {
+  display: grid;
+  grid-template-columns: 60px repeat(7, 1fr);
+  border-bottom: 1px solid #000;
+}
+
+.week-header-cell {
+  padding: 10px 5px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  border-right: 1px solid #ccc;
+}
+
+.week-header-cell:last-child {
+  border-right: none;
+}
+
+.week-header-cell.today {
+  background: #000;
+  color: #fff;
+}
+
+.week-header-day {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: #666;
+}
+
+.week-header-cell.today .week-header-day {
+  color: #ccc;
+}
+
+.week-grid {
+  display: grid;
+  grid-template-columns: 60px repeat(7, 1fr);
+}
+
+.week-time-label {
+  padding: 4px 8px;
+  font-size: 11px;
+  border-right: 1px solid #000;
+  border-bottom: 1px solid #eee;
+  height: 40px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.week-cell {
+  position: relative;
+  border-right: 1px solid #eee;
+  border-bottom: 1px solid #eee;
+  height: 40px;
+  min-height: 40px;
+}
+
+.week-cell:nth-child(8n) {
+  border-right: none;
+}
+
+.week-cell.drag-over {
+  background: #f0f0f0;
+}
+
+/* Task Items */
+.task {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  padding: 3px 6px;
+  border: 1px solid #000;
+  background: #fff;
+  font-size: 11px;
+  cursor: pointer;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.task:hover {
+  background: #f5f5f5;
+}
+
+.task.dragging {
+  opacity: 0.5;
+}
+
+.task-name {
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.task-time {
+  font-size: 9px;
+  color: #666;
+}
+
+.task-progress {
+  font-size: 9px;
+  color: #999;
+}
+
+/* Voice Container */
+.voice-container {
+  position: fixed;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  z-index: 9999;
+  pointer-events: auto;
+}
+
+.mic-btn {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  border: 2px solid #000;
+  background: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.mic-btn:hover {
+  background: #000;
+  color: #fff;
+}
+
+.mic-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mic-btn.recording {
+  background: #000;
+  color: #fff;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.1);
+  }
+}
+
+.voice-status {
+  font-size: 12px;
+  color: #666;
+  text-align: center;
+  max-width: 300px;
+  background: #fff;
+  padding: 4px 12px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}

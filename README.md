@@ -1,61 +1,55 @@
-# Skej - A Precise Day Scheduler
+# skej
 
-Skej is a full-featured scheduling application built with Bun, React, SQLite, and Vanilla CSS. It works both as a CLI tool and a local web application.
+Voice-driven AI scheduler powered by Gemini 3. Just talk about your day and AI automatically schedules it for you.
 
-## Features
-- **Local First**: All data is stored in a local `skej.db` SQLite file.
-- **Precise Scheduling**: Drag and drop interface for day planning.
-- **CLI Support**: Add and list events directly from the terminal.
-- **Modern UI**: Clean, glassmorphism-inspired design.
+## Quick Start
 
-## Getting Started
+1. **Get a Gemini API Key**
+   - Go to [Google AI Studio](https://aistudio.google.com/apikey)
+   - Create an API key
 
-### Prerequisites
-- [Bun](https://bun.sh) (v1.0+)
-
-### Installation
-1. Clone the repository.
-2. Install dependencies:
+2. **Set up environment**
    ```bash
-   bun install
+   cp .env.example .env
+   # Edit .env and add your GEMINI_API_KEY
    ```
-3. Build the frontend:
+
+3. **Install dependencies**
    ```bash
-   bun run build
+   npm install
    ```
+
+4. **Run the app**
+   ```bash
+   npm start
+   ```
+
+5. **Open in browser**
+   - Frontend: http://localhost:3000
+   - API: http://localhost:3001
 
 ## Usage
 
-### Web Interface
-Start the unified server (API + Frontend):
-```bash
-bun run start
-```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+1. Click the ⚙️ button to add context (e.g., "I live in Chicago")
+2. Click the 🎤 microphone button and speak
+3. Say something like: "Tomorrow I want to do yoga at 7pm and go to Costco as early as possible"
+4. AI will automatically add tasks to your schedule
+5. Drag tasks to adjust times if needed
 
-- **Add Events**: Use the sidebar to create tasks.
-- **Drag & Drop**: Drag events on the timeline to reschedule them.
-- **Persistence**: Everything is saved to `skej.db` instantly.
+## Tech Stack
 
-### CLI Interface
-You can interact with your schedule via the command line.
+- **Frontend**: Vanilla HTML/CSS/JS
+- **Backend**: Node.js + Express
+- **AI**: Google Gemini 3 Flash
 
-**List Events:**
-```bash
-bun run cli list
-```
+## API Endpoints
 
-**Add Event:**
-```bash
-bun run cli add -t "My Meeting" -s "14:00" -d 60
-```
-- `-t`: Title
-- `-s`: Start time (HH:mm)
-- `-d`: Duration in minutes (default 60)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/schedule` | Upload audio file to schedule tasks |
+| POST | `/api/schedule-text` | Text-based scheduling (fallback) |
+| GET | `/api/health` | Health check |
 
-### Development
-To run the frontend with Hot Module Replacement (HMR):
-```bash
-bun run dev
-```
-Note: You will also need to run `bun run start` (on port 3000) in another terminal to serve the API, as the Vite dev server proxies `/api` requests to it.
+## License
+
+MIT

@@ -1,13 +1,95 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Skej - Your Day</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/frontend/main.tsx"></script>
-  </body>
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>skej - Scheduler</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="container">
+    <header>
+      <h1>skej</h1>
+      <div class="header-right">
+        <button class="nav-btn" id="prevBtn">←</button>
+        <button class="date-btn" id="dateBtn">
+          <span id="dateDisplay"></span>
+        </button>
+        <button class="nav-btn" id="nextBtn">→</button>
+        <input type="date" id="datePicker" style="display:none;">
+        <button class="info-btn" id="infoBtn" title="Settings">⚙</button>
+      </div>
+    </header>
+
+    <!-- Settings Modal -->
+    <div class="modal" id="infoModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Settings</h2>
+          <button class="close-btn" id="closeModal">×</button>
+        </div>
+
+        <!-- View Toggle -->
+        <div class="setting-group">
+          <label>View Mode</label>
+          <div class="toggle-group">
+            <button class="toggle-btn active" id="dailyViewBtn">Daily</button>
+            <button class="toggle-btn" id="weeklyViewBtn">Weekly</button>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <label>AI Context</label>
+          <p class="setting-hint">Add information to help the AI understand your preferences:</p>
+          <textarea id="aiContext"
+            placeholder="e.g. I live in Chicago, I prefer morning workouts, my gym opens at 6am..."></textarea>
+        </div>
+
+        <button class="save-btn" id="saveContext">Save</button>
+      </div>
+    </div>
+
+    <!-- Task Details Modal -->
+    <div class="modal" id="taskModal">
+      <div class="modal-content task-modal-content">
+        <div class="modal-header">
+          <h2 id="taskModalTitle">Task Details</h2>
+          <button class="close-btn" id="closeTaskModal">×</button>
+        </div>
+        <div class="task-time-info" id="taskTimeInfo"></div>
+        <div class="subtasks-list" id="subtasksList"></div>
+        <button class="delete-task-btn" id="deleteTaskBtn">Delete Task</button>
+      </div>
+    </div>
+
+    <div class="main">
+      <!-- Daily Timeline (shown by default) -->
+      <div class="timeline" id="timeline"></div>
+
+      <!-- Weekly View (hidden by default) -->
+      <div class="weekly-view" id="weeklyView" style="display:none;">
+        <div class="week-header" id="weekHeader"></div>
+        <div class="week-grid" id="weekGrid"></div>
+      </div>
+    </div>
+
+    <!-- Voice Input -->
+    <div class="voice-container">
+      <button class="mic-btn" id="micBtn">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+          <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+          <line x1="12" y1="19" x2="12" y2="23"></line>
+          <line x1="8" y1="23" x2="16" y2="23"></line>
+        </svg>
+      </button>
+      <div class="voice-status" id="voiceStatus">Click to speak</div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+
 </html>
